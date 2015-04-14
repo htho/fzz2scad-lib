@@ -29,14 +29,30 @@ scaddoc is inspired by javadoc. Where applicable the [rules for documenting
 Java code](http://www.oracle.com/technetwork/java/javase/documentation/index-137868.html)
 should applied to scad code.
 
-### Block-Tags (eg. `@param`, `@author`)
+### Tags (eg. `@param`, `@author`)
 
-An author may define any block tag for any entity (Except for the filename
+An author may define any tag for any entity (Except for the filename
 tag, which should only appear once per file).
 Tags may be defined multiple times. Tags that end with `-list` are expected
 to be comma separated lists of values.
 
-The following keywords have a specific meaning:
+#### Standard Tags
+Standard Tags like `@author` are used to store simple Information.
+These tags may be defined multiple times. Information will be retreived
+as a whole.
+
+#### `-list` Tags
+Tags that end with `-list` are used to specify an actual *list* of values.
+
+#### `-dict` Tags
+Tags that end with `-dict` are used to specify a dictionary of key-value
+pairs. The key is the first word after the tag. The value starts after a
+whitespace after the key.
+
+All the `-dependency` and `param` tags implicitly are dictionaries.
+
+### Specific Tags
+The following Tags have a specific meaning:
 
 #### All entities
 
@@ -154,17 +170,18 @@ This is not implemented yet, but you are encouraged to use it.
 `@adopt-all ENTITYNAME`
 :    like adopt but with -dependency, param and return tags.
 
-`@adopt-behavior {replace, append, prepend} (default: replace)
+@adopt-behavior {replace, append, prepend}` (default: replace)
 :    What should happen if a tag is defined in the adopting entity?
      Sets the default behavior, see below.
 
-`@TAGNAME-{replace VALUE, append VALUE, prepend VALUE, remove}`
-
-`@TAGNAME-list/dict-{replace [ITEM_TO_REPLACE] VALUE[, VALUE, ...], append VALUE[, VALUE, ...], prepend VALUE[, VALUE, ...], remove ITEM_TO_REMOVE[,ITEM_TO_REMOVE, ...]}`
+`@TAGNAME-{replace, append, prepend} VALUE`  
+`@TAGNAME-{remove}`  
+`@TAGNAME-list|dict-replace [ITEM_TO_REPLACE] VALUE[, VALUE, ...]`  
+`@TAGNAME-list|dict-remove ITEM_TO_REMOVE[,ITEM_TO_REMOVE, ...]`  
+`@TAGNAME-list|dict-{append, prepend} VALUE[, VALUE, ...]`  
 :    Override the default behavior for the given Tag.
 
-Example:
-
+#### Adoption Example:
 source entity:
 
     @author foo bar
