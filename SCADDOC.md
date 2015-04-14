@@ -170,7 +170,7 @@ This is not implemented yet, but you are encouraged to use it.
 `@adopt-all ENTITYNAME`
 :    like adopt but with -dependency, param and return tags.
 
-@adopt-behavior {replace, append, prepend}` (default: replace)
+`@adopt-behavior {replace, append, prepend}` (default: replace)
 :    What should happen if a tag is defined in the adopting entity?
      Sets the default behavior, see below.
 
