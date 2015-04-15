@@ -16,6 +16,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
+from pip._vendor.html5lib.constants import entities
 VERSION = 0.1
 # import statements: We use pythons included batteries!
 import re
@@ -627,7 +628,9 @@ class ScadEntityDependency():
 
     def getDummyResolution(self):
         meta = ScadDoc("@description !!!!! DUMMY ENTITY !!!!!\n" + self.description, scadType=self.scadEntityType)
-        return self.scadEntityType(name=self.name, metaData=meta)
+        ret = self.scadEntityType(name=self.name, metaData=meta)
+        ret.isDummy = True
+        return ret
 
     def __str__(self):
         return """ScadEntityDependency[
@@ -710,6 +713,7 @@ class ScadEntity(ScadType):
         ScadType.__init__(self, metaData)
         self.name = name
         self.inScadFile = inScadFile
+        self.isDummy = False
 
     def isResolution(self, dependency):
         if not isinstance(dependency, ScadEntityDependency):
@@ -887,7 +891,7 @@ class ScadFile(ScadFileDummy):
         return list(filter(lambda reference: isinstance(reference, ScadUseFileReference), self.getAvailableReferences()))
 
 # Output Functions
-    def asScad(self, recursive=False):
+    def asScad(self, recursive=False, excludeList=list(), dummiesFirst=False):
         """Return the content of this File built from the data in this file.
         Not the content (which is the difference from asDump()).
         """
@@ -895,6 +899,11 @@ class ScadFile(ScadFileDummy):
             entities = self.getAvailableEntities()
         else:
             entities = self.getDefinedEntities()
+
+        entities = list(filter(lambda entity: entity not in excludeList, entities))
+
+        if dummiesFirst:
+            entities = sorted(entities, key=(lambda entity: entity.isDummy), reverse=True)
 
         references = self.getReferencedFiles()
         referencesAsScad = list()
@@ -908,7 +917,7 @@ class ScadFile(ScadFileDummy):
         entitiesAsScad = "\n\n".join(entitiesAsScad)
 
         if recursive:
-            # References are don't need to be included, as their contnent
+            # References don't need to be included, as their contnent
             # is part of the entities.
             return "{meta}\n\n{entities}""".format(meta=self.metaData.asScad(), entities=entitiesAsScad)
         else:
@@ -1584,7 +1593,7 @@ if __name__ == "__main__":
             else:
                 jsonMapping = json.loads(args.mapping)
 
-            printConsole("JSON-Mapping:" + txt_pretty_print(jsonMapping) + "\n", 1)
+            printConsole("\nJSON-Mapping:" + txt_prefix_each_line(txt_pretty_print(jsonMapping), "    ") + "\n", 1)
 
             mappingFile = ScadFile()
 
@@ -1618,31 +1627,42 @@ if __name__ == "__main__":
                         raise ValueError("The key for the mapping type must be: 'module', 'function' or 'variable' but is '{}'".format(entityType))
                     mappingFile.addDefinedEntity(entity)
 
-            printConsole("Mapping-Entities:\n" + txt_pretty_print(mappingFile.getDefinedEntities(), indent=1) + "\n", 1)
+            printConsole("\nMapping-Entities:\n" + txt_prefix_each_line(txt_pretty_print(mappingFile.getDefinedEntities()), "    ") + "\n", 1)
             libraryFileList = [mappingFile] + libraryFileList
 
-        printConsole("libraryFileList:\n" + txt_pretty_print(libraryFileList), 2)
+        printConsole("Looking for resolutions in these files:\n" + txt_prefix_each_line(txt_pretty_print(libraryFileList), "    ") + "\n", 2)
 
         dependencyTree, unresolvedDependencies = inputFile.getDependencyTreeAndUnresolvedDependencies([inputFile] + libraryFileList)
 
-        printConsole("Dependency Tree:\n" + txt_pretty_print(dependencyTree, kvsep=" depends on: "), 2)
+        if dependencyTree is None:
+            printConsole("""\nWARNING: The dependency tree is empty!
+    This means NONE of the defined dependencies could be resolved.
+
+    You may try --traverse in order to search subdirectories.
+    Check the name of the defined dependencies.
+    Did you forget to include needed files that are not part of the library?
+
+    Dummies will be created...""", 1)
+            dependencyTree = dict()
+
+        printConsole("\nDependency Tree:" + txt_pretty_print(dependencyTree, kvsep=" depends on: "), 2)
 
         neededEntities = ScadEntity.reduceRedundanciesInDependencyTree(dependencyTree)
-        printConsole("Resolving entities:\n" + txt_pretty_print(neededEntities), 2)
 
         if len(unresolvedDependencies) > 0:
             dummyResolutions = list()
-            printConsole("Unresolved Dependencies:\n" + txt_pretty_print(unresolvedDependencies), 1)
+            printConsole("\nUnresolved Dependencies:\n" + txt_prefix_each_line(txt_pretty_print(unresolvedDependencies), "    "), 1)
             if not args.dont_create_dummies:
+                printConsole("\nCreating dummies for the unresolved dependencies..." + txt_pretty_print(neededEntities), 2)
                 for dependency in unresolvedDependencies:
                     dummyResolutions.append(dependency.getDummyResolution())
-            printConsole("Dummy resolutions:\n" + txt_pretty_print(dummyResolutions), 3)
+            printConsole(txt_prefix_each_line(txt_pretty_print(dummyResolutions), "    "), 3)
             neededEntities = neededEntities + dummyResolutions
             neededEntities = list(set(neededEntities))  # should be unnecessary as there should be no duplicates.
 
         # remove entities that are defined in the input file
         neededEntities = list(filter(lambda entity: entity not in inputFile.getDefinedEntities(), neededEntities))
-        printConsole("Entities that are part of the library:\n" + txt_pretty_print(neededEntities), 2)
+        printConsole("\nEntities in library:\n" + txt_prefix_each_line(txt_pretty_print(neededEntities), "    "), 2)
 
         if args.all_in_one:
             outFileName = determineOutFile(args.INPUT_FILE, "allinone.", "scad")
@@ -1657,7 +1677,7 @@ if __name__ == "__main__":
             outScadFile = ScadFile(definedEntities=neededEntities)
             if outFileName is not None:
                 outScadFile.metaData.add("filename", outFileName)
-            outString = outScadFile.asScad()
+            outString = outScadFile.asScad(dummiesFirst=True)
 
         outputHelper(outString, outFileName)
 
